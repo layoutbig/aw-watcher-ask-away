@@ -330,6 +330,40 @@ function Install-ActivityWatchModuleShim {
     }
 }
 
+function Remove-LegacySystemLaunchers {
+    Write-Step "Removing legacy PATH-based $WatcherName launchers"
+
+    $candidateDirs = New-Object System.Collections.Generic.List[string]
+    $candidateDirs.Add((Join-Path $env:USERPROFILE ".local\bin"))
+
+    foreach ($base in @($env:APPDATA, $env:LOCALAPPDATA)) {
+        foreach ($version in @("Python311", "Python312", "Python313", "Python314")) {
+            $candidateDirs.Add((Join-Path $base "Python\$version\Scripts"))
+            $candidateDirs.Add((Join-Path $base "Programs\Python\$version\Scripts"))
+        }
+    }
+
+    foreach ($dir in ($candidateDirs | Select-Object -Unique)) {
+        if (-not (Test-Path -LiteralPath $dir)) {
+            continue
+        }
+
+        foreach ($name in @("$WatcherName.exe", "$WatcherName.console.exe", "$WatcherName-script.py", "$WatcherName-script.pyw")) {
+            $path = Join-Path $dir $name
+            if (Test-Path -LiteralPath $path) {
+                try {
+                    Remove-Item -LiteralPath $path -Force
+                    Write-InstallerLog "Removed legacy launcher $path"
+                }
+                catch {
+                    Write-Warning "Could not remove legacy launcher $path`: $_"
+                    Write-InstallerLog "Could not remove legacy launcher $path`: $_"
+                }
+            }
+        }
+    }
+}
+
 function Remove-SeparateStartupShortcut {
     Write-Step "Removing separate Windows Startup shortcut, if present"
     $startup = [Environment]::GetFolderPath("Startup")
@@ -507,6 +541,7 @@ else {
 }
 
 Install-ActivityWatchModuleShim
+Remove-LegacySystemLaunchers
 Remove-SeparateStartupShortcut
 Set-AwQtAutostartModules
 Restart-ActivityWatch
