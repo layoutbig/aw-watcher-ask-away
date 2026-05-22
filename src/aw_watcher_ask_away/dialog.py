@@ -179,7 +179,34 @@ class AWAskAwayDialog(simpledialog.Dialog):
         self.prompt = prompt
         self.history = history
         self.history_index = len(history)
+        self._enforce_foreground = True
         super().__init__(root, title)
+
+    def _bring_to_front(self, *, force_focus: bool = False):
+        if not self._enforce_foreground:
+            return
+
+        try:
+            self.deiconify()
+            self.attributes("-topmost", True)
+            self.lift()
+            if force_focus:
+                self.focus_set()
+            if force_focus and hasattr(self, "entry"):
+                self.entry.focus_set()
+        except tk.TclError:
+            # The dialog may already be closing.
+            return
+
+    def _recover_from_minimize(self, event=None):  # noqa: ARG002
+        if self._enforce_foreground and self.state() == "iconic":
+            self.after(50, self._bring_to_front)
+
+    def _configure_forced_foreground(self):
+        self.attributes("-topmost", True)
+        self.bind("<Unmap>", self._recover_from_minimize, add="+")
+        self.after(0, lambda: self._bring_to_front(force_focus=True))
+        self.after(250, self._bring_to_front)
 
     # @override (when we get to 3.12)
     def body(self, master):
@@ -231,6 +258,7 @@ class AWAskAwayDialog(simpledialog.Dialog):
 
         self.bind("<Control-comma>", self.open_config)
 
+        self._configure_forced_foreground()
         return self.entry
 
     def save_new_abbreviation(self, event=None, *, long: bool = False):  # noqa: ARG002
@@ -255,7 +283,12 @@ class AWAskAwayDialog(simpledialog.Dialog):
                     break
 
         # Prompt for the abbreviation
-        result = AddAbbreviationDialog(self, initial_expansion).result
+        self._enforce_foreground = False
+        try:
+            result = AddAbbreviationDialog(self, initial_expansion).result
+        finally:
+            self._enforce_foreground = True
+            self._bring_to_front(force_focus=True)
 
         if result:
             abbr, expansion = result
@@ -327,7 +360,12 @@ class AWAskAwayDialog(simpledialog.Dialog):
         self.result = self.entry.get().strip()
 
     def open_config(self, event=None):  # noqa: ARG002
-        ConfigDialog(self)
+        self._enforce_foreground = False
+        try:
+            ConfigDialog(self)
+        finally:
+            self._enforce_foreground = True
+            self._bring_to_front(force_focus=True)
 
     def cancel(self, event=None):  # noqa: ARG002
         # Call withdraw first because it is faster.
