@@ -15,11 +15,19 @@ logger = logging.getLogger(__name__)
 root = tk.Tk()
 root.withdraw()
 
+DEFAULT_PRESETS = ("Auxílio Produção", "Almoço/Café", "Banheiro", "Reunião", "Treinamento", "Scrum", "Off")
+
 
 def open_link(link: str):
     import webbrowser
 
     webbrowser.open(link)
+
+
+def _get_config_dir() -> Path:
+    config_dir = Path(appdirs.user_config_dir("aw-watcher-ask-away"))
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir
 
 
 class _AbbreviationStore(UserDict[str, str]):
@@ -30,9 +38,7 @@ class _AbbreviationStore(UserDict[str, str]):
 
     def __init__(self, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
-        config_dir = Path(appdirs.user_config_dir("aw-watcher-ask-away"))
-        config_dir.mkdir(parents=True, exist_ok=True)
-        self._config_file = config_dir / "abbreviations.json"
+        self._config_file = _get_config_dir() / "abbreviations.json"
         self._load_from_config()
 
     def _load_from_config(self):
@@ -54,6 +60,58 @@ class _AbbreviationStore(UserDict[str, str]):
     def __delitem__(self, key: str) -> None:
         super().__delitem__(key)
         self._save_to_config()
+
+
+class _PresetStore:
+    """Store user-created prompt presets alongside built-in presets."""
+
+    def __init__(self):
+        self._config_file = _get_config_dir() / "presets.json"
+        self._custom_presets: list[str] = []
+        self._load_from_config()
+
+    def _load_from_config(self):
+        if not self._config_file.exists():
+            return
+
+        with self._config_file.open(encoding="utf-8") as f:
+            try:
+                loaded = json.load(f)
+            except json.JSONDecodeError:
+                logger.exception("Failed to load presets from config file.")
+                return
+
+        if not isinstance(loaded, list):
+            logger.warning("Ignoring presets config because it is not a list.")
+            return
+
+        for preset in loaded:
+            if isinstance(preset, str):
+                self.add(preset, save=False)
+
+    def _save_to_config(self):
+        with self._config_file.open("w", encoding="utf-8") as f:
+            json.dump(self._custom_presets, f, indent=4, ensure_ascii=False)
+
+    def _all_presets(self) -> list[str]:
+        presets = []
+        for preset in (*DEFAULT_PRESETS, *self._custom_presets):
+            if preset not in presets:
+                presets.append(preset)
+        return presets
+
+    def add(self, preset: str, *, save: bool = True) -> bool:
+        preset = preset.strip()
+        if not preset or preset in self._all_presets():
+            return False
+
+        self._custom_presets.append(preset)
+        if save:
+            self._save_to_config()
+        return True
+
+    def values(self) -> list[str]:
+        return self._all_presets()
 
 
 class ConfigDialog(simpledialog.Dialog):
@@ -95,6 +153,26 @@ class AddAbbreviationDialog(simpledialog.Dialog):
 
     def apply(self):
         self.result = (self.abbr.get(), self.expansion.get())
+
+
+class AddPresetDialog(simpledialog.Dialog):
+    def __init__(self, master, preset: str | None = None):
+        self.preset_value = preset
+        super().__init__(master, "Add Preset")
+
+    def body(self, master):
+        master = ttk.Frame(master)
+        master.grid()
+
+        ttk.Label(master, text="Preset").grid(row=0, column=0)
+        self.preset = ttk.Entry(master, width=40)
+        if self.preset_value:
+            self.preset.insert(0, self.preset_value)
+        self.preset.grid(row=0, column=1)
+        return self.preset
+
+    def apply(self):
+        self.result = self.preset.get().strip()
 
 
 # TODO: Link the abbreviations json file for editing directly.
@@ -170,6 +248,7 @@ class AbbreviationPane(ttk.Frame):
 
 # Singleton
 abbreviations = _AbbreviationStore()
+presets = _PresetStore()
 
 
 # TODO: This widget pops up off-center when using multiple screes on Linux, possibly other platforms.
@@ -224,6 +303,11 @@ class AWAskAwayDialog(simpledialog.Dialog):
         self.entry = ttk.Entry(master, name="entry", width=40)
         self.entry.grid(row=1, padx=5, sticky=tk.W + tk.E)
 
+        self.presets_frame = ttk.Frame(master)
+        self.presets_frame.grid(row=2, column=0, columnspan=2, padx=5, pady=(8, 0), sticky=tk.W + tk.E)
+        self.preset_buttons = []
+        self.draw_presets()
+
         # README link
         doc_label = ttk.Label(master, text="Documentation", foreground="blue", cursor="hand2", justify=tk.RIGHT)
         doc_label.grid(row=0, padx=5, sticky=tk.W, column=1)
@@ -260,6 +344,38 @@ class AWAskAwayDialog(simpledialog.Dialog):
 
         self._configure_forced_foreground()
         return self.entry
+
+    def draw_presets(self):
+        for button in self.preset_buttons:
+            button.destroy()
+        self.preset_buttons = []
+
+        for index, preset in enumerate(presets.values()):
+            button = ttk.Button(self.presets_frame, text=preset, command=lambda value=preset: self.use_preset(value))
+            button.grid(row=index // 3, column=index % 3, padx=(0, 5), pady=(0, 5), sticky=tk.W + tk.E)
+            self.preset_buttons.append(button)
+
+        add_index = len(self.preset_buttons)
+        add_button = ttk.Button(self.presets_frame, text="+ Predefinição", command=self.add_preset)
+        add_button.grid(row=add_index // 3, column=add_index % 3, padx=(0, 5), pady=(0, 5), sticky=tk.W + tk.E)
+        self.preset_buttons.append(add_button)
+
+    def use_preset(self, preset: str):
+        self.set_text(preset)
+        self.ok()
+
+    def add_preset(self):
+        initial_value = self.entry.get().strip()
+        self._enforce_foreground = False
+        try:
+            result = AddPresetDialog(self, initial_value).result
+        finally:
+            self._enforce_foreground = True
+            self._bring_to_front(force_focus=True)
+
+        if result and presets.add(result):
+            self.draw_presets()
+            self.set_text(result)
 
     def save_new_abbreviation(self, event=None, *, long: bool = False):  # noqa: ARG002
         if self.entry.selection_present():
