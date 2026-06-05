@@ -364,6 +364,23 @@ function Remove-LegacySystemLaunchers {
     }
 }
 
+function Remove-LegacyPipxInstall {
+    Write-Step "Removing legacy pipx $WatcherName install, if present"
+
+    $pipxHome = if ($env:PIPX_HOME) { $env:PIPX_HOME } else { Join-Path $env:USERPROFILE "pipx" }
+    $venvDir = Join-Path $pipxHome "venvs\$WatcherName"
+    if (Test-Path -LiteralPath $venvDir) {
+        try {
+            Remove-Item -LiteralPath $venvDir -Recurse -Force
+            Write-InstallerLog "Removed legacy pipx venv $venvDir"
+        }
+        catch {
+            Write-Warning "Could not remove legacy pipx venv $venvDir`: $_"
+            Write-InstallerLog "Could not remove legacy pipx venv $venvDir`: $_"
+        }
+    }
+}
+
 function Remove-SeparateStartupShortcut {
     Write-Step "Removing separate Windows Startup shortcut, if present"
     $startup = [Environment]::GetFolderPath("Startup")
@@ -542,6 +559,7 @@ else {
 
 Install-ActivityWatchModuleShim
 Remove-LegacySystemLaunchers
+Remove-LegacyPipxInstall
 Remove-SeparateStartupShortcut
 Set-AwQtAutostartModules
 Restart-ActivityWatch

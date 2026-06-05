@@ -46,14 +46,16 @@ function Invoke-Checked {
 function Get-PythonExe {
     $py = Get-Command py -ErrorAction SilentlyContinue
     if ($py) {
-        $result = & py -3.12 -c "import sys; print(sys.executable)" 2>$null
-        if ($LASTEXITCODE -eq 0 -and $result) {
-            return ($result | Select-Object -First 1)
-        }
-
-        $result = & py -3 -c "import sys; print(sys.executable)" 2>$null
-        if ($LASTEXITCODE -eq 0 -and $result) {
-            return ($result | Select-Object -First 1)
+        foreach ($version in @("3.12", "3.11", "3.13", "3.14", "3")) {
+            try {
+                $result = & $py.Source "-$version" -c "import sys; assert sys.version_info >= (3, 11); print(sys.executable)" 2>$null
+                if ($LASTEXITCODE -eq 0 -and $result) {
+                    return ($result | Select-Object -First 1)
+                }
+            }
+            catch {
+                continue
+            }
         }
     }
 
@@ -104,11 +106,13 @@ if (-not $wheel) {
 Copy-Item -LiteralPath $InstallerScript -Destination (Join-Path $BuildDir "install-windows-activitywatch.ps1") -Force
 Copy-Item -LiteralPath $wheel.FullName -Destination (Join-Path $BuildDir $wheel.Name) -Force
 
-Write-Host "==> Ensuring PyInstaller is available"
-$check = Start-Process -FilePath $python -ArgumentList @("-m", "PyInstaller", "--version") -Wait -PassThru -WindowStyle Hidden
-if ($check.ExitCode -ne 0) {
-    Invoke-Checked $python @("-m", "pip", "install", "--user", "pyinstaller")
-}
+Write-Host "==> Preparing PyInstaller build environment"
+$BuildVenvDir = Join-Path $BuildDir "pyinstaller-venv"
+Invoke-Checked $python @("-m", "venv", $BuildVenvDir)
+$buildPython = Join-Path $BuildVenvDir "Scripts\python.exe"
+Invoke-Checked $buildPython @("-m", "pip", "install", "--no-cache-dir", "--upgrade", "pip")
+Invoke-Checked $buildPython @("-m", "pip", "install", "--no-cache-dir", "pyinstaller")
+Invoke-Checked $buildPython @("-m", "pip", "install", "--no-cache-dir", $wheel.FullName)
 
 $icon = Get-ActivityWatchIcon
 $pyinstallerArgs = @(
@@ -161,7 +165,7 @@ if ($icon) {
         $WatcherLauncherScript
     )
 }
-Invoke-Checked $python $watcherArgs
+Invoke-Checked $buildPython $watcherArgs
 
 $watcherExe = Join-Path $watcherBuildDist "aw-watcher-ask-away.exe"
 if (-not (Test-Path -LiteralPath $watcherExe)) {
@@ -204,7 +208,7 @@ if ($icon) {
 }
 
 Write-Host "==> Building $OutputPath"
-Invoke-Checked $python $pyinstallerArgs
+Invoke-Checked $buildPython $pyinstallerArgs
 
 if (-not (Test-Path -LiteralPath $OutputPath)) {
     throw "Installer EXE was not created: $OutputPath"
