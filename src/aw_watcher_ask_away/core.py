@@ -11,7 +11,7 @@ from typing import Any
 import aw_core
 import aw_transform
 from aw_client.client import ActivityWatchClient
-from requests.exceptions import HTTPError
+from requests.exceptions import RequestException
 
 WATCHER_NAME = "aw-watcher-ask-away"
 LOCAL_TIMEZONE = datetime.datetime.now().astimezone().tzinfo
@@ -96,8 +96,8 @@ class AWAskAwayClient:
             if is_afk(events[0]):  # Currently AFK, wait to bring up the prompt.
                 return
             yield from self.state.get_unseen_afk_events(events, seconds, durration_thresh)
-        except HTTPError:
-            logger.exception("Failed to get events from the server.")
+        except RequestException as exc:
+            logger.warning("Failed to get events from the server; will retry on next poll: %s", exc)
             return
 
 

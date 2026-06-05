@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>aw-watcher-ask-away</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --panel-soft: #eef2f4;
+      --text: #17202a;
+      --muted: #5d6975;
+      --line: #d8dee4;
+      --accent: #227a75;
+      --accent-2: #b65c32;
+      --accent-3: #4969a8;
+      --danger: #ad3f45;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #11161c;
+        --panel: #18202a;
+        --panel-soft: #202a35;
+        --text: #e7edf4;
+        --muted: #aab5c2;
+        --line: #2d3946;
+        --accent: #53b6ae;
+        --accent-2: #d98555;
+        --accent-3: #8ba6e8;
+        --danger: #e06c73;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      overflow-x: hidden;
+    }
+
+    button,
+    select {
+      font: inherit;
+    }
+
+    .app {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.15;
+      font-weight: 750;
+    }
+
+    .subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .control {
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 0 10px;
+      box-shadow: var(--shadow);
+      max-width: 100%;
+    }
+
+    button.control {
+      cursor: pointer;
+      font-weight: 650;
+    }
+
+    button.control:hover {
+      border-color: var(--accent);
+    }
+
+    .status {
+      min-height: 22px;
+      margin-bottom: 12px;
+      color: var(--muted);
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      gap: 10px;
+      grid-column: 1 / -1;
+    }
+
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .metric-value {
+      margin-top: 4px;
+      font-size: 24px;
+      line-height: 1.1;
+      font-weight: 760;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 720;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .timeline {
+      padding: 10px 14px 14px;
+    }
+
+    .day-row {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr) 70px;
+      gap: 10px;
+      align-items: center;
+      min-height: 34px;
+    }
+
+    .day-label {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .day-total {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .day-track {
+      position: relative;
+      height: 16px;
+      border-radius: 4px;
+      background: var(--panel-soft);
+      overflow: hidden;
+    }
+
+    .segment {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      min-width: 2px;
+      border-radius: 3px;
+      background: var(--accent);
+    }
+
+    .segment:nth-child(3n + 1) {
+      background: var(--accent-2);
+    }
+
+    .segment:nth-child(3n + 2) {
+      background: var(--accent-3);
+    }
+
+    .bars {
+      padding: 12px 14px 14px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1fr) 72px;
+      gap: 10px;
+      align-items: center;
+      min-height: 32px;
+    }
+
+    .bar-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bar-track {
+      height: 12px;
+      border-radius: 4px;
+      background: var(--panel-soft);
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      min-width: 2px;
+      border-radius: 4px;
+      background: var(--accent);
+    }
+
+    .bar-value {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .events {
+      padding: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    td {
+      font-size: 13px;
+    }
+
+    td:nth-child(1) {
+      width: 130px;
+      white-space: nowrap;
+    }
+
+    td:nth-child(2) {
+      width: 78px;
+      white-space: nowrap;
+    }
+
+    td:nth-child(3) {
+      overflow-wrap: anywhere;
+    }
+
+    .empty {
+      padding: 22px 14px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 760px) {
+      .app {
+        padding: 10px;
+      }
+
+      header,
+      .controls {
+        display: block;
+        min-width: 0;
+      }
+
+      .controls {
+        margin-top: 10px;
+      }
+
+      .control {
+        width: 100%;
+        margin-top: 8px;
+      }
+
+      .metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .metrics,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .day-row {
+        grid-template-columns: 74px minmax(0, 1fr) 58px;
+      }
+
+      .bar-row {
+        grid-template-columns: minmax(84px, 0.75fr) minmax(0, 1fr) 62px;
+      }
+    }
+
+    @media (max-width: 420px) {
+      h1 {
+        font-size: 20px;
+      }
+
+      .subtitle {
+        display: none;
+      }
+
+      .metric {
+        padding: 8px;
+      }
+
+      .metric-value {
+        font-size: 19px;
+      }
+
+      .status {
+        font-size: 12px;
+      }
+    }
+
+    @media (max-height: 260px) {
+      .subtitle,
+      .status,
+      .grid {
+        display: none;
+      }
+
+      header {
+        margin-bottom: 8px;
+      }
+
+      .metrics {
+        margin-bottom: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div>
+        <h1>Tempo Ausente</h1>
+        <div class="subtitle">Resumo dos períodos AFK anotados pelo aw-watcher-ask-away</div>
+      </div>
+      <div class="controls">
+        <select id="bucketSelect" class="control" aria-label="Bucket"></select>
+        <select id="rangeSelect" class="control standalone-only" aria-label="Periodo">
+          <option value="1">Hoje</option>
+          <option value="7" selected>7 dias</option>
+          <option value="30">30 dias</option>
+          <option value="90">90 dias</option>
+        </select>
+        <button id="refreshButton" class="control" type="button">Atualizar</button>
+      </div>
+    </header>
+
+    <div id="status" class="status">Carregando eventos...</div>
+
+    <div class="grid">
+      <section>
+        <div class="section-head">
+          <h2>Por resposta</h2>
+          <span id="topLabel" class="hint"></span>
+        </div>
+        <div id="bars" class="bars"></div>
+      </section>
+
+      <section style="grid-column: 1 / -1;">
+        <div class="section-head">
+          <h2>Eventos recentes</h2>
+          <span class="hint">Do mais novo para o mais antigo</span>
+        </div>
+        <div class="events">
+          <table>
+            <thead>
+              <tr>
+                <th>Inicio</th>
+                <th>Duração</th>
+                <th>Resposta</th>
+              </tr>
+            </thead>
+            <tbody id="eventsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Tempo anotado</div>
+          <div id="totalMetric" class="metric-value">--</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Sessões</div>
+          <div id="countMetric" class="metric-value">--</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Média por sessão</div>
+          <div id="averageMetric" class="metric-value">--</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Maior ausência</div>
+          <div id="longestMetric" class="metric-value">--</div>
+        </div>
+      </div>
+
+      <section style="grid-column: 1 / -1;">
+        <div class="section-head">
+          <h2>Linha do tempo</h2>
+          <span id="rangeLabel" class="hint"></span>
+        </div>
+        <div id="timeline" class="timeline"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const WATCHER_NAME = "aw-watcher-ask-away";
+    const API_BASE = location.protocol === "file:" ? "http://127.0.0.1:5600" : location.origin;
+    const params = new URLSearchParams(location.search);
+    const hasHostRange = params.has("start") && params.has("end");
+
+    const state = {
+      buckets: [],
+      selectedBucket: "",
+      events: [],
+    };
+
+    function resizeHostFrame() {
+      try {
+        if (!window.frameElement) {
+          return;
+        }
+
+        const frame = window.frameElement;
+        frame.style.display = "block";
+        frame.style.width = "100%";
+        frame.style.minWidth = "0";
+        frame.style.border = "0";
+
+        const contentHeight = Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight,
+          560
+        );
+        frame.style.height = `${Math.min(contentHeight + 12, 920)}px`;
+      } catch (error) {
+        console.debug("Could not resize host iframe", error);
+      }
+    }
+
+    const els = {
+      status: document.getElementById("status"),
+      bucketSelect: document.getElementById("bucketSelect"),
+      rangeSelect: document.getElementById("rangeSelect"),
+      refreshButton: document.getElementById("refreshButton"),
+      totalMetric: document.getElementById("totalMetric"),
+      countMetric: document.getElementById("countMetric"),
+      averageMetric: document.getElementById("averageMetric"),
+      longestMetric: document.getElementById("longestMetric"),
+      rangeLabel: document.getElementById("rangeLabel"),
+      topLabel: document.getElementById("topLabel"),
+      timeline: document.getElementById("timeline"),
+      bars: document.getElementById("bars"),
+      eventsBody: document.getElementById("eventsBody"),
+    };
+
+    if (hasHostRange) {
+      document.querySelectorAll(".standalone-only").forEach((element) => {
+        element.hidden = true;
+      });
+    }
+
+    function normalizeArray(payload) {
+      if (Array.isArray(payload)) {
+        return payload;
+      }
+      if (Array.isArray(payload.value)) {
+        return payload.value;
+      }
+      return [];
+    }
+
+    async function apiGet(path) {
+      const response = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
+      return response.json();
+    }
+
+    function setStatus(message, isError = false) {
+      els.status.textContent = message;
+      els.status.classList.toggle("error", isError);
+    }
+
+    function getRange() {
+      const startParam = params.get("start");
+      const endParam = params.get("end");
+      if (startParam && endParam) {
+        return {
+          start: new Date(startParam),
+          end: new Date(endParam),
+        };
+      }
+
+      const days = Number(els.rangeSelect.value);
+      const end = new Date();
+      const start = new Date(end);
+      if (days === 1) {
+        start.setHours(0, 0, 0, 0);
+      } else {
+        start.setDate(start.getDate() - days);
+      }
+      return { start, end };
+    }
+
+    function formatDateTime(date) {
+      return new Intl.DateTimeFormat(undefined, {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(date);
+    }
+
+    function formatDay(date) {
+      return new Intl.DateTimeFormat(undefined, {
+        weekday: "short",
+        day: "2-digit",
+        month: "2-digit",
+      }).format(date);
+    }
+
+    function formatDuration(seconds) {
+      if (!seconds || seconds < 1) {
+        return "0m";
+      }
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.round((seconds % 3600) / 60);
+      if (hours === 0) {
+        return `${minutes}m`;
+      }
+      if (minutes === 0) {
+        return `${hours}h`;
+      }
+      return `${hours}h ${minutes}m`;
+    }
+
+    function eventMessage(event) {
+      const message = String(event.data?.message || "").trim();
+      return message || "Sem resposta";
+    }
+
+    function eventDuration(event) {
+      return Number(event.duration || 0);
+    }
+
+    function parseEvent(event) {
+      const start = new Date(event.timestamp);
+      const duration = eventDuration(event);
+      return {
+        ...event,
+        start,
+        end: new Date(start.getTime() + duration * 1000),
+        duration,
+        message: eventMessage(event),
+      };
+    }
+
+    async function loadBuckets() {
+      const bucketsPayload = await apiGet("/api/0/buckets/");
+      const buckets = Object.values(bucketsPayload)
+        .filter((bucket) => bucket.client === WATCHER_NAME || bucket.id.startsWith(`${WATCHER_NAME}_`))
+        .sort((a, b) => a.id.localeCompare(b.id));
+
+      state.buckets = buckets;
+      els.bucketSelect.innerHTML = "";
+
+      if (buckets.length === 0) {
+        const option = document.createElement("option");
+        option.textContent = "Bucket nao encontrado";
+        els.bucketSelect.append(option);
+        throw new Error(`Nenhum bucket ${WATCHER_NAME}_* encontrado`);
+      }
+
+      for (const bucket of buckets) {
+        const option = document.createElement("option");
+        option.value = bucket.id;
+        option.textContent = bucket.hostname ? `${bucket.hostname} (${bucket.type})` : bucket.id;
+        els.bucketSelect.append(option);
+      }
+
+      const hostname = params.get("hostname");
+      const hostBucket = hostname ? buckets.find((bucket) => bucket.hostname === hostname) : null;
+      const preferredBucket = params.get("bucket") || state.selectedBucket || hostBucket?.id || buckets[0].id;
+      state.selectedBucket = buckets.some((bucket) => bucket.id === preferredBucket) ? preferredBucket : buckets[0].id;
+      els.bucketSelect.value = state.selectedBucket;
+    }
+
+    async function loadEvents() {
+      const { start, end } = getRange();
+      const query = new URLSearchParams({
+        start: start.toISOString(),
+        end: end.toISOString(),
+      });
+      const path = `/api/0/buckets/${encodeURIComponent(state.selectedBucket)}/events?${query.toString()}`;
+      const payload = await apiGet(path);
+      state.events = normalizeArray(payload)
+        .map(parseEvent)
+        .sort((a, b) => b.start - a.start);
+      return { start, end };
+    }
+
+    function renderMetrics(events) {
+      const total = events.reduce((sum, event) => sum + event.duration, 0);
+      const count = events.length;
+      const average = count ? total / count : 0;
+      const longest = events.reduce((max, event) => Math.max(max, event.duration), 0);
+
+      els.totalMetric.textContent = formatDuration(total);
+      els.countMetric.textContent = String(count);
+      els.averageMetric.textContent = formatDuration(average);
+      els.longestMetric.textContent = formatDuration(longest);
+    }
+
+    function renderTimeline(events, range) {
+      els.timeline.innerHTML = "";
+      const days = [];
+      const cursor = new Date(range.start);
+      cursor.setHours(0, 0, 0, 0);
+      const endDay = new Date(range.end);
+      endDay.setHours(0, 0, 0, 0);
+
+      while (cursor <= endDay) {
+        days.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      if (days.length === 0) {
+        els.timeline.innerHTML = '<div class="empty">Sem dias no periodo selecionado.</div>';
+        return;
+      }
+
+      for (const day of days.reverse()) {
+        const dayStart = new Date(day);
+        const dayEnd = new Date(day);
+        dayEnd.setDate(dayEnd.getDate() + 1);
+
+        const clipped = events
+          .map((event) => ({
+            event,
+            start: new Date(Math.max(event.start, dayStart)),
+            end: new Date(Math.min(event.end, dayEnd)),
+          }))
+          .filter((item) => item.end > item.start);
+
+        const row = document.createElement("div");
+        row.className = "day-row";
+
+        const label = document.createElement("div");
+        label.className = "day-label";
+        label.textContent = formatDay(day);
+
+        const track = document.createElement("div");
+        track.className = "day-track";
+
+        let total = 0;
+        for (const item of clipped) {
+          const left = ((item.start - dayStart) / 86400000) * 100;
+          const width = ((item.end - item.start) / 86400000) * 100;
+          total += (item.end - item.start) / 1000;
+
+          const segment = document.createElement("div");
+          segment.className = "segment";
+          segment.style.left = `${Math.max(0, left)}%`;
+          segment.style.width = `${Math.max(0.2, width)}%`;
+          segment.title = `${formatDateTime(item.event.start)} - ${formatDuration(item.event.duration)} - ${item.event.message}`;
+          track.append(segment);
+        }
+
+        const dayTotal = document.createElement("div");
+        dayTotal.className = "day-total";
+        dayTotal.textContent = formatDuration(total);
+
+        row.append(label, track, dayTotal);
+        els.timeline.append(row);
+      }
+    }
+
+    function renderBars(events) {
+      els.bars.innerHTML = "";
+      const totals = new Map();
+      for (const event of events) {
+        totals.set(event.message, (totals.get(event.message) || 0) + event.duration);
+      }
+
+      const rows = [...totals.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 12);
+
+      els.topLabel.textContent = rows.length ? `${rows.length} respostas` : "";
+
+      if (rows.length === 0) {
+        els.bars.innerHTML = '<div class="empty">Nenhum evento neste periodo.</div>';
+        return;
+      }
+
+      const max = rows[0][1];
+      for (const [message, seconds] of rows) {
+        const row = document.createElement("div");
+        row.className = "bar-row";
+
+        const label = document.createElement("div");
+        label.className = "bar-label";
+        label.title = message;
+        label.textContent = message;
+
+        const track = document.createElement("div");
+        track.className = "bar-track";
+
+        const fill = document.createElement("div");
+        fill.className = "bar-fill";
+        fill.style.width = `${Math.max(2, (seconds / max) * 100)}%`;
+        track.append(fill);
+
+        const value = document.createElement("div");
+        value.className = "bar-value";
+        value.textContent = formatDuration(seconds);
+
+        row.append(label, track, value);
+        els.bars.append(row);
+      }
+    }
+
+    function renderTable(events) {
+      els.eventsBody.innerHTML = "";
+      const recent = events.slice(0, 50);
+
+      if (recent.length === 0) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 3;
+        cell.className = "empty";
+        cell.textContent = "Nenhum evento neste periodo.";
+        row.append(cell);
+        els.eventsBody.append(row);
+        return;
+      }
+
+      for (const event of recent) {
+        const row = document.createElement("tr");
+
+        const startCell = document.createElement("td");
+        startCell.textContent = formatDateTime(event.start);
+
+        const durationCell = document.createElement("td");
+        durationCell.textContent = formatDuration(event.duration);
+
+        const messageCell = document.createElement("td");
+        messageCell.textContent = event.message;
+
+        row.append(startCell, durationCell, messageCell);
+        els.eventsBody.append(row);
+      }
+    }
+
+    function render(range) {
+      const events = state.events;
+      renderMetrics(events);
+      renderTimeline(events, range);
+      renderBars(events);
+      renderTable(events);
+
+      els.rangeLabel.textContent = `${formatDateTime(range.start)} - ${formatDateTime(range.end)}`;
+      setStatus(`${events.length} eventos em ${state.selectedBucket}`);
+      requestAnimationFrame(resizeHostFrame);
+    }
+
+    async function refresh() {
+      try {
+        setStatus("Carregando eventos...");
+        await loadBuckets();
+        const range = await loadEvents();
+        render(range);
+      } catch (error) {
+        console.error(error);
+        renderMetrics([]);
+        els.timeline.innerHTML = "";
+        els.bars.innerHTML = "";
+        els.eventsBody.innerHTML = "";
+        setStatus(`Erro: ${error.message}`, true);
+        requestAnimationFrame(resizeHostFrame);
+      }
+    }
+
+    els.bucketSelect.addEventListener("change", () => {
+      state.selectedBucket = els.bucketSelect.value;
+      refresh();
+    });
+    els.rangeSelect.addEventListener("change", refresh);
+    els.refreshButton.addEventListener("click", refresh);
+    window.addEventListener("resize", resizeHostFrame);
+
+    resizeHostFrame();
+    if ("ResizeObserver" in window) {
+      new ResizeObserver(resizeHostFrame).observe(document.body);
+    }
+
+    refresh();
+  </script>
+</body>
+</html>

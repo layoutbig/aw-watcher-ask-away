@@ -15,6 +15,61 @@ pipx install aw-watcher-ask-away
 
 ([Need to install `pipx` first?](https://pypa.github.io/pipx/installation/))
 
+## Custom visualization
+
+This repository includes an experimental ActivityWatch custom visualization at:
+
+```text
+visualization/dist
+```
+
+The Windows installer embeds that HTML and installs it into the user's
+ActivityWatch directory:
+
+```text
+%LOCALAPPDATA%\activitywatch\activitywatch\aw-watcher-ask-away\visualization\dist\index.html
+```
+
+It also registers the installed directory in `aw-server.toml`:
+
+```toml
+[server.custom_static]
+aw-watcher-ask-away = "C:/Users/<USER>/AppData/Local/activitywatch/activitywatch/aw-watcher-ask-away/visualization/dist"
+```
+
+On Windows, the default config file is usually:
+
+```text
+%LOCALAPPDATA%\activitywatch\activitywatch\aw-server\aw-server.toml
+```
+
+Restart ActivityWatch after editing the config. Then open the Activity view, click
+`Edit view`, add a visualization, select `Custom visualization`, and enter:
+
+```text
+aw-watcher-ask-away
+```
+
+The visualization finds the `aw-watcher-ask-away_<hostname>` bucket automatically
+and summarizes the recorded `data.message` entries.
+
+If you edit the TOML from PowerShell, make sure it is saved as UTF-8 without BOM.
+Older Windows PowerShell commands such as `Set-Content -Encoding UTF8` can add a
+BOM that makes `aw-server` fail at startup with `tomlkit.exceptions.EmptyKeyError`.
+
+To build a visualization-only installer for users who already have ActivityWatch
+and `aw-watcher-ask-away` installed:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\build-windows-visualization-installer.ps1
+```
+
+The output is:
+
+```text
+dist\AskAwayVisualizationInstaller.exe
+```
+
 ## Roadmap
 
 Most of the improvements involve a more complicated pop-up window.

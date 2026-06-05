@@ -2,8 +2,9 @@
 import datetime
 
 import aw_core
+import requests
 
-from aw_watcher_ask_away.core import AWAskAwayState
+from aw_watcher_ask_away.core import AWAskAwayClient, AWAskAwayState
 
 AFK = "afk"
 NOT_AFK = "not-afk"
@@ -27,6 +28,19 @@ def _tuple_to_event(tup: TupleEvent) -> aw_core.Event:
 
 def _event_to_tuple(event: aw_core.Event) -> tuple[int, int]:
     return (int(event.timestamp.timestamp()), event.duration.seconds)
+
+
+def test_client_ignores_transient_server_connection_errors():
+    class DisconnectedClient:
+        def get_events(self, bucket_id, limit):
+            raise requests.exceptions.ConnectionError("server is not ready")
+
+    client = AWAskAwayClient.__new__(AWAskAwayClient)
+    client.client = DisconnectedClient()
+    client.afk_bucket_id = "aw-watcher-afk_TEST"
+    client.state = AWAskAwayState([])
+
+    assert list(client.get_new_afk_events_to_note(seconds=60, durration_thresh=60)) == []
 
 
 def test_get_unseen_afk_events_initial():
