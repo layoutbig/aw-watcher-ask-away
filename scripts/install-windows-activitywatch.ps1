@@ -297,22 +297,16 @@ function Install-ActivityWatchModuleShim {
 
     $awQt = Get-AwQtExePath
     if (-not $awQt) {
-        Write-Warning "ActivityWatch aw-qt.exe was not found. Falling back to PATH-based module discovery."
-        return
+        Write-Warning "ActivityWatch aw-qt.exe was not found. Bundled module installation is not possible."
+        return $false
     }
 
-    $standaloneLauncher = Join-Path $PSScriptRoot "$WatcherName.exe"
-    $sourceLauncher = if (Test-Path -LiteralPath $standaloneLauncher) {
-        $standaloneLauncher
-    }
-    else {
-        Join-Path $env:USERPROFILE ".local\bin\$WatcherName.exe"
-    }
+    $sourceLauncher = Get-WatcherSourceLauncher
 
     if (-not (Test-Path -LiteralPath $sourceLauncher)) {
         Write-Warning "Expected $WatcherName launcher was not found at $sourceLauncher"
         Write-InstallerLog "Expected launcher not found at $sourceLauncher"
-        return
+        return $false
     }
 
     $awRoot = Split-Path -Parent $awQt
@@ -323,11 +317,78 @@ function Install-ActivityWatchModuleShim {
         New-Item -ItemType Directory -Path $moduleDir -Force | Out-Null
         Copy-Item -LiteralPath $sourceLauncher -Destination $targetLauncher -Force
         Write-InstallerLog "Copied $sourceLauncher to $targetLauncher"
+        return $true
     }
     catch {
         Write-Warning "Could not copy $WatcherName into ActivityWatch modules folder: $_"
         Write-InstallerLog "Could not copy launcher into ActivityWatch modules folder: $_"
     }
+
+    Write-Warning "Requesting administrator permission to install the bundled ActivityWatch module."
+    if (Install-ActivityWatchModuleShimElevated $sourceLauncher $moduleDir $targetLauncher) {
+        return $true
+    }
+
+    return $false
+}
+
+function Install-ActivityWatchModuleShimElevated {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceLauncher,
+        [Parameter(Mandatory = $true)][string]$ModuleDir,
+        [Parameter(Mandatory = $true)][string]$TargetLauncher
+    )
+
+    $escapedSourceLauncher = $SourceLauncher.Replace("'", "''")
+    $escapedModuleDir = $ModuleDir.Replace("'", "''")
+    $escapedTargetLauncher = $TargetLauncher.Replace("'", "''")
+    $escapedInstallerLogPath = $InstallerLogPath.Replace("'", "''")
+
+    $copyCommand = @"
+`$ErrorActionPreference = 'Stop'
+New-Item -ItemType Directory -Path '$escapedModuleDir' -Force | Out-Null
+Copy-Item -LiteralPath '$escapedSourceLauncher' -Destination '$escapedTargetLauncher' -Force
+try {
+    "Copied $escapedSourceLauncher to $escapedTargetLauncher with elevated permissions" | Add-Content -LiteralPath '$escapedInstallerLogPath' -Encoding UTF8
+}
+catch {
+}
+"@
+
+    $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($copyCommand))
+
+    try {
+        $process = Start-Process -FilePath "powershell.exe" -ArgumentList @(
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-EncodedCommand",
+            $encodedCommand
+        ) -Verb RunAs -Wait -PassThru
+    }
+    catch {
+        Write-Warning "Administrator permission was not granted or elevated copy could not start: $_"
+        Write-InstallerLog "Elevated bundled module copy could not start: $_"
+        return $false
+    }
+
+    if ($process.ExitCode -eq 0 -and (Test-Path -LiteralPath $TargetLauncher)) {
+        Write-InstallerLog "Copied $SourceLauncher to $TargetLauncher with elevated permissions"
+        return $true
+    }
+
+    Write-Warning "Elevated bundled module copy failed with exit code $($process.ExitCode)."
+    Write-InstallerLog "Elevated bundled module copy failed with exit code $($process.ExitCode)."
+    return $false
+}
+
+function Get-WatcherSourceLauncher {
+    $standaloneLauncher = Join-Path $PSScriptRoot "$WatcherName.exe"
+    if (Test-Path -LiteralPath $standaloneLauncher) {
+        return $standaloneLauncher
+    }
+
+    return (Join-Path $env:USERPROFILE ".local\bin\$WatcherName.exe")
 }
 
 function Remove-LegacySystemLaunchers {
@@ -362,6 +423,61 @@ function Remove-LegacySystemLaunchers {
             }
         }
     }
+}
+
+function Remove-DirectoryFromUserPath {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    $normalizedDirectory = $Directory.TrimEnd("\")
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($userPath) {
+        $updatedEntries = @(
+            $userPath -split ";" |
+                Where-Object { $_ -and ($_.TrimEnd("\") -ine $normalizedDirectory) }
+        )
+        [Environment]::SetEnvironmentVariable("Path", ($updatedEntries -join ";"), "User")
+    }
+
+    if ($env:Path) {
+        $updatedProcessEntries = @(
+            $env:Path -split ";" |
+                Where-Object { $_ -and ($_.TrimEnd("\") -ine $normalizedDirectory) }
+        )
+        $env:Path = ($updatedProcessEntries -join ";")
+    }
+}
+
+function Remove-LegacySystemModuleFallback {
+    Write-Step "Removing legacy system-module fallback, if present"
+
+    $systemModuleDir = Join-Path $env:LOCALAPPDATA "$WatcherName\bin"
+    $systemModuleLauncher = Join-Path $systemModuleDir "$WatcherName.exe"
+
+    if (Test-Path -LiteralPath $systemModuleLauncher) {
+        try {
+            Remove-Item -LiteralPath $systemModuleLauncher -Force
+            Write-InstallerLog "Removed legacy system-module fallback launcher $systemModuleLauncher"
+        }
+        catch {
+            Write-Warning "Could not remove legacy system-module fallback launcher $systemModuleLauncher`: $_"
+            Write-InstallerLog "Could not remove legacy system-module fallback launcher $systemModuleLauncher`: $_"
+        }
+    }
+
+    if (Test-Path -LiteralPath $systemModuleDir) {
+        $remainingItems = @(Get-ChildItem -LiteralPath $systemModuleDir -Force -ErrorAction SilentlyContinue)
+        if ($remainingItems.Count -eq 0) {
+            try {
+                Remove-Item -LiteralPath $systemModuleDir -Force
+                Write-InstallerLog "Removed empty legacy system-module fallback directory $systemModuleDir"
+            }
+            catch {
+                Write-InstallerLog "Could not remove empty legacy system-module fallback directory $systemModuleDir`: $_"
+            }
+        }
+    }
+
+    Remove-DirectoryFromUserPath $systemModuleDir
 }
 
 function Remove-LegacyPipxInstall {
@@ -543,7 +659,8 @@ $null = Get-AwQtConfigPath
 Stop-AskAwayProcesses
 
 $standalonePayload = Join-Path $PSScriptRoot "$WatcherName.exe"
-if (Test-Path -LiteralPath $standalonePayload) {
+$usingStandalonePayload = Test-Path -LiteralPath $standalonePayload
+if ($usingStandalonePayload) {
     Write-Step "Using standalone watcher payload: $standalonePayload"
 }
 else {
@@ -557,9 +674,18 @@ else {
     Convert-WatcherLauncherToGui $python
 }
 
-Install-ActivityWatchModuleShim
+$moduleInstalled = Install-ActivityWatchModuleShim
+if (-not $moduleInstalled) {
+    throw "Could not install $WatcherName as an ActivityWatch module."
+}
 Remove-LegacySystemLaunchers
-Remove-LegacyPipxInstall
+Remove-LegacySystemModuleFallback
+if ($usingStandalonePayload) {
+    Remove-LegacyPipxInstall
+}
+else {
+    Write-Step "Keeping pipx $WatcherName install used by the ActivityWatch module"
+}
 Remove-SeparateStartupShortcut
 Set-AwQtAutostartModules
 Restart-ActivityWatch

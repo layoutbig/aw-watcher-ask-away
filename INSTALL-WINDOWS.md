@@ -53,15 +53,19 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-windows-activitywatch
 ```
 
 This avoids relying on the user's PATH when ActivityWatch starts with Windows.
+If ActivityWatch is installed in a protected location such as `Program Files`
+and the copy is denied, the installer requests administrator permission through
+UAC and retries the copy so the watcher is still installed as a bundled module.
 
-8. Removes any separate Windows Startup shortcut named `aw-watcher-ask-away.lnk`.
-9. Adds `aw-watcher-ask-away` to ActivityWatch's `autostart_modules` list in:
+8. Removes legacy PATH/system-module fallback launchers from previous installer versions.
+9. Removes any separate Windows Startup shortcut named `aw-watcher-ask-away.lnk`.
+10. Adds `aw-watcher-ask-away` to ActivityWatch's `autostart_modules` list in:
 
 ```text
 %LOCALAPPDATA%\activitywatch\activitywatch\aw-qt\aw-qt.toml
 ```
 
-10. Restarts ActivityWatch unless `-NoRestartActivityWatch` is passed.
+11. Restarts ActivityWatch unless `-NoRestartActivityWatch` is passed.
 
 The installer also writes a diagnostic log to:
 
